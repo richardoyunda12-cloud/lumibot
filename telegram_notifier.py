@@ -163,39 +163,39 @@ class TelegramNotifier:
 
     def notify_daily_portfolio(self, date, portfolio_value, day_return, cash,
                                cash_pct, positions, total_unrealized, regime):
-        """Ringkasan harian lengkap dengan detail tiap posisi — entry, current, P&L."""
+        """Ringkasan harian lengkap dengan detail tiap posisi — mobile-friendly."""
         if not self._lvl(1): return
         tag = "UP" if day_return >= 0 else "DOWN"
         regime_emoji = {"BULL": "🟢", "TRANS": "🟡", "BEAR": "🔴"}.get(str(regime), "⚪")
+
         lines = [
-            f"📊 *RINGKASAN HARIAN* · {_esc(date)} [{tag}]",
+            f"📊 *RINGKASAN HARIAN · {_esc(date)}*",
             f"━━━━━━━━━━━━━━━━━━━━",
-            f"💰 Portfolio: *${portfolio_value:,.0f}*",
-            f"📈 Hari ini: *{day_return:+.2%}*",
-            f"💵 Cash: ${cash:,.0f} ({cash_pct:.0%})",
-            f"{regime_emoji} Regime: {_esc(regime)}",
+            f"💰 *${portfolio_value:,.0f}*  {day_return:+.2%} hari ini",
+            f"💵 Cash ${cash:,.0f} ({cash_pct:.0%})  {regime_emoji} {_esc(regime)}",
         ]
+
         if positions:
-            lines.append(f"\n🏷️ *POSISI AKTIF ({len(positions)}):*")
+            lines.append(f"\n*POSISI ({len(positions)}):*")
             for p in sorted(positions, key=lambda x: x.get("pnl_pct", 0), reverse=True):
-                sym       = _esc(p.get("sym", "?"))
-                entry     = p.get("entry", 0)
-                current   = p.get("current", 0)
-                pnl_pct   = p.get("pnl_pct", 0)
-                pnl_dollar= p.get("pnl_dollar", 0)
-                qty       = p.get("qty", 0)
-                edate     = _esc(p.get("entry_date", "?"))
-                icon      = "🟢" if pnl_pct >= 0 else "🔴"
+                sym        = _esc(p.get("sym", "?"))
+                entry      = p.get("entry", 0)
+                current    = p.get("current", 0)
+                pnl_pct    = p.get("pnl_pct", 0)
+                pnl_dollar = p.get("pnl_dollar", 0)
+                qty        = p.get("qty", 0)
+                edate      = _esc(p.get("entry_date", "?"))
+                icon       = "🟢" if pnl_pct >= 0 else "🔴"
+                # Format compact: semua info dalam 2 baris
                 lines.append(
-                    f"{icon} *{sym}* x{qty}\n"
-                    f"   `${entry:,.2f} -> ${current:,.2f}` "
-                    f"*{pnl_pct:+.1%}* (${pnl_dollar:+,.0f})\n"
-                    f"   Masuk: {edate}"
+                    f"{icon} *{sym}* x{qty}  {pnl_pct:+.1%} (${pnl_dollar:+,.0f})\n"
+                    f"    ${entry:,.2f}→${current:,.2f}  masuk {edate}"
                 )
             icon_u = "🟢" if total_unrealized >= 0 else "🔴"
-            lines.append(f"\n{icon_u} *Total Unrealized: ${total_unrealized:+,.0f}*")
+            lines.append(f"\n{icon_u} *Unrealized: ${total_unrealized:+,.0f}*")
         else:
-            lines.append("\n💤 Full cash — tidak ada posisi aktif")
+            lines.append("\n💤 Full cash")
+
         self._send("\n".join(lines))
 
     def notify_weekly(self, week, week_return, spy_return, trades_count, portfolio_value):
