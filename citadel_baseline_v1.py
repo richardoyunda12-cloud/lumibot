@@ -589,8 +589,70 @@ class CitadelLevelQuantV8S30(Strategy):
                     self.dlogger.log_scanner(week, self.vars.regime, cand_sorted)
         self.vars.last_scan_week = wk_key
 
+    # ── DAILY PORTFOLIO SUMMARY ───────────────────────────────────────
+    def _maybe_send_daily_summary(self):
+        """Kirim ringkasan portfolio harian sekali per hari saat market close."""
+        if not self.notifier: return
+        today = str(self.get_datetime().date())
+        if getattr(self.vars, "last_daily_summary", None) == today: return
+        hour = self.get_datetime().hour
+        if not (15 <= hour <= 16): return  # jam 15-16 ET (market close)
+        self.vars.last_daily_summary = today
+        self._send_daily_summary(today)
+
+    def _send_daily_summary(self, date: str):
+        """Bangun dan kirim ringkasan portfolio detail ke Telegram."""
+        if not self.notifier: return
+        try:
+            positions = [p for p in self.get_positions() if p.quantity > 0]
+            portfolio_value = float(self.portfolio_value)
+            cash = float(self.cash)
+            cash_pct = cash / portfolio_value if portfolio_value > 0 else 0
+
+            # Detail tiap posisi
+            pos_details = []
+            total_unrealized = 0.0
+            for pos in positions:
+                sym = pos.asset.symbol
+                qty = int(pos.quantity)
+                st = self._st(sym)
+                entry = st.get("entry_price")
+                entry_date = st.get("entry_date", "?")
+                try:
+                    current = float(self.get_last_price(sym) or 0)
+                except Exception:
+                    current = 0.0
+                if entry and entry > 0 and current > 0:
+                    pnl_pct = (current / entry - 1)
+                    pnl_dollar = (current - entry) * qty
+                    total_unrealized += pnl_dollar
+                else:
+                    pnl_pct = 0.0; pnl_dollar = 0.0
+                pos_details.append({
+                    "sym": sym, "entry": entry or 0, "current": current,
+                    "qty": qty, "pnl_pct": pnl_pct,
+                    "pnl_dollar": pnl_dollar, "entry_date": entry_date,
+                })
+
+            # Return harian (approx)
+            prev_val = getattr(self.vars, "prev_portfolio_value", portfolio_value)
+            day_ret = (portfolio_value / prev_val - 1) if prev_val > 0 else 0.0
+            self.vars.prev_portfolio_value = portfolio_value
+
+            self.notifier.notify_daily_portfolio(
+                date=date, portfolio_value=portfolio_value,
+                day_return=day_ret, cash=cash, cash_pct=cash_pct,
+                positions=pos_details, total_unrealized=total_unrealized,
+                regime=self.vars.regime,
+            )
+        except Exception as e:
+            self.log_message(f"⚠️ Daily summary gagal: {e}")
+
     def on_trading_iteration(self):
         self._update_regime()
+
+        # ── Kirim ringkasan harian sekali per hari (saat close) ───────
+        self._maybe_send_daily_summary()
 
         breached, dd = self._update_dd()
         if breached:

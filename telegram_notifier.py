@@ -161,6 +161,43 @@ class TelegramNotifier:
             txt += f"\n🏷️ {', '.join(_esc(h) for h in holdings[:8])}"
         self._send(txt)
 
+    def notify_daily_portfolio(self, date, portfolio_value, day_return, cash,
+                               cash_pct, positions, total_unrealized, regime):
+        """Ringkasan harian lengkap dengan detail tiap posisi — entry, current, P&L."""
+        if not self._lvl(1): return
+        tag = "UP" if day_return >= 0 else "DOWN"
+        regime_emoji = {"BULL": "🟢", "TRANS": "🟡", "BEAR": "🔴"}.get(str(regime), "⚪")
+        lines = [
+            f"📊 *RINGKASAN HARIAN* · {_esc(date)} [{tag}]",
+            f"━━━━━━━━━━━━━━━━━━━━",
+            f"💰 Portfolio: *${portfolio_value:,.0f}*",
+            f"📈 Hari ini: *{day_return:+.2%}*",
+            f"💵 Cash: ${cash:,.0f} ({cash_pct:.0%})",
+            f"{regime_emoji} Regime: {_esc(regime)}",
+        ]
+        if positions:
+            lines.append(f"\n🏷️ *POSISI AKTIF ({len(positions)}):*")
+            for p in sorted(positions, key=lambda x: x.get("pnl_pct", 0), reverse=True):
+                sym       = _esc(p.get("sym", "?"))
+                entry     = p.get("entry", 0)
+                current   = p.get("current", 0)
+                pnl_pct   = p.get("pnl_pct", 0)
+                pnl_dollar= p.get("pnl_dollar", 0)
+                qty       = p.get("qty", 0)
+                edate     = _esc(p.get("entry_date", "?"))
+                icon      = "🟢" if pnl_pct >= 0 else "🔴"
+                lines.append(
+                    f"{icon} *{sym}* x{qty}\n"
+                    f"   `${entry:,.2f} -> ${current:,.2f}` "
+                    f"*{pnl_pct:+.1%}* (${pnl_dollar:+,.0f})\n"
+                    f"   Masuk: {edate}"
+                )
+            icon_u = "🟢" if total_unrealized >= 0 else "🔴"
+            lines.append(f"\n{icon_u} *Total Unrealized: ${total_unrealized:+,.0f}*")
+        else:
+            lines.append("\n💤 Full cash — tidak ada posisi aktif")
+        self._send("\n".join(lines))
+
     def notify_weekly(self, week, week_return, spy_return, trades_count, portfolio_value):
         if not self._lvl(1): return
         vs = "✅ beat SPY" if week_return > spy_return else "❌ below SPY"
