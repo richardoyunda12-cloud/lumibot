@@ -590,15 +590,14 @@ class CitadelLevelQuantV8S30(Strategy):
         self.vars.last_scan_week = wk_key
 
     # ── DAILY PORTFOLIO SUMMARY ───────────────────────────────────────
-    def _maybe_send_daily_summary(self):
-        """Kirim ringkasan portfolio harian sekali per hari saat market close."""
-        if not self.notifier: return
-        today = str(self.get_datetime().date())
-        if getattr(self.vars, "last_daily_summary", None) == today: return
-        hour = self.get_datetime().hour
-        if not (15 <= hour <= 16): return  # jam 15-16 ET (market close)
-        self.vars.last_daily_summary = today
-        self._send_daily_summary(today)
+    def after_market_closes(self):
+        """
+        Dipanggil Lumibot otomatis setiap hari saat market tutup (16:00 ET).
+        Kirim ringkasan portfolio harian ke Telegram.
+        """
+        date = str(self.get_datetime().date())
+        self.log_message(f"📊 Market closed — kirim ringkasan harian {date}")
+        self._send_daily_summary(date)
 
     def _send_daily_summary(self, date: str):
         """Bangun dan kirim ringkasan portfolio detail ke Telegram."""
@@ -650,9 +649,6 @@ class CitadelLevelQuantV8S30(Strategy):
 
     def on_trading_iteration(self):
         self._update_regime()
-
-        # ── Kirim ringkasan harian sekali per hari (saat close) ───────
-        self._maybe_send_daily_summary()
 
         breached, dd = self._update_dd()
         if breached:
